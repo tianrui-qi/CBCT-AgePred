@@ -14,13 +14,13 @@ import tqdm         # progress bar
 from typing import List, Tuple
 
 
-class Patient(Dataset):
+class Patients(Dataset):
     def __init__(
         self, info_fold: str, cbct_fold: str, tiff_fold: str,
         min_HU: int, max_HU: int,
-        augmentation: bool, degrees: float, translation: int, std: float
+        degrees: float, translation: int, std: float
     ) -> None:
-        super(Patient, self).__init__()
+        super(Patients, self).__init__()
         # path
         self.info_fold = info_fold
         self.cbct_fold = cbct_fold
@@ -29,7 +29,7 @@ class Patient(Dataset):
         self.min_HU = min_HU
         self.max_HU = max_HU
         # augmentation
-        self.augmentation = augmentation
+        self.augmentation = None  # control by train() and evalu() mode switch
         self.transform = tio.transforms.Compose([
             tio.RandomFlip(axes=(2,), flip_probability=0.5),
             tio.RandomAffine(
@@ -86,7 +86,6 @@ class Patient(Dataset):
             if len(shape_num[key]) < 50:
                 for value in shape_num[key]:
                     name_list.remove(value)
-                del shape_num[key]
 
         return name_list
 
@@ -109,6 +108,12 @@ class Patient(Dataset):
                     if info_list[i] is None: info_list[i] = age
                     if info_list[i] != age: print(info_path, "age miss match")
         return info_list
+
+    def train(self) -> None:
+        self.augmentation = True
+
+    def evalu(self) -> None:
+        self.augmentation = False
 
     def __getitem__(self, index: int) -> Tuple[Tensor, float]:
         # read the tiff
