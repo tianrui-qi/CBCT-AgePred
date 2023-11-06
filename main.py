@@ -17,4 +17,4 @@ if __name__ == "__main__":
         dataset=patients, model=resattnet, **cfg.runner_config
     )
 
-    # trainer.fit()
+    trainer.fit()

@@ -89,7 +89,7 @@ class Patients(Dataset):
 
         return name_list
 
-    def _getInfoList(self) -> List[float]:
+    def _getInfoList(self) -> Tensor:
         info_list = [None] * len(self.name_list)
         for i in tqdm.tqdm(range(len(self.name_list)), desc="_getInfoList"):
             info_path = os.path.join(self.info_fold, self.name_list[i] + ".txt")
@@ -107,7 +107,7 @@ class Patients(Dataset):
                     age: float = (y * 365.25 + m * 30.5 + d) / 365.25
                     if info_list[i] is None: info_list[i] = age
                     if info_list[i] != age: print(info_path, "age miss match")
-        return info_list
+        return torch.tensor(info_list).float()
 
     def train(self) -> None:
         self.augmentation = True

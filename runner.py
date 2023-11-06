@@ -15,7 +15,7 @@ class Trainer:
     def __init__(
         self, max_epoch: int, accumu_steps: int, evalu_frequency: int,
         ckpt_save_fold: str, ckpt_load_path: str, ckpt_load_lr: bool,
-        dataset: Dataset, train_pct: float, batch_size: int, 
+        dataset: Dataset, train_num: int, batch_size: int, num_workers: int,
         model: nn.Module, lr: float, gamma: float
     ) -> None:
         self.device = "cuda"
@@ -28,18 +28,19 @@ class Trainer:
         self.ckpt_load_lr   = ckpt_load_lr
 
         # dataset
-        dataset = dataset
-        train_size = int(train_pct * len(dataset))
-        evalu_size = len(dataset) - train_size
-        trainset, evaluset = random_split(dataset, [train_size, evalu_size])
+        trainset, evaluset = random_split(
+            dataset, [train_num, len(dataset) - train_num]
+        )
+        trainset.dataset.train()
+        evaluset.dataset.evalu()
         # dataloader
         self.trainloader = DataLoader(
-            trainset.dataset.train(), pin_memory=True, 
-            batch_size=batch_size, num_workers=batch_size, 
+            trainset, pin_memory=True, 
+            batch_size=batch_size, num_workers=num_workers, 
         )
         self.evaluloader = DataLoader(
-            evaluset.dataset.evalu(), pin_memory=True,
-            batch_size=batch_size, num_workers=batch_size, 
+            evaluset, pin_memory=True,
+            batch_size=batch_size, num_workers=num_workers, 
         )
         # model
         self.model = model
@@ -75,6 +76,7 @@ class Trainer:
             unit="epoch", initial=self.epoch
         ):
             self._train_epoch()
+            if (self.epoch+1) % self.evalu_frequency != 0: continue
             self._valid_epoch()
             self._update_lr()
             self._save_ckpt()
@@ -89,7 +91,6 @@ class Trainer:
         )
         # record: tensorboard
         train_loss = []
-        train_num  = []
 
         for i, (frames, labels) in enumerate(self.trainloader):
             # put frames and labels in GPU
@@ -104,7 +105,6 @@ class Trainer:
 
             # record: tensorboard
             train_loss.append(loss_value.item() / len(predis))
-            train_num.append(len(torch.nonzero(predis)) / len(predis))
 
             # update model parameters
             if (i+1) % self.accumu_steps != 0: continue
@@ -118,13 +118,7 @@ class Trainer:
                 (self.epoch - 1) * len(self.trainloader) / self.accumu_steps + 
                 (i + 1) / self.accumu_steps
             )  # average loss of each frame
-            self.writer.add_scalars(
-                'scalars/numb', {'train': torch.mean(torch.as_tensor(train_num))}, 
-                (self.epoch - 1) * len(self.trainloader) / self.accumu_steps + 
-                (i + 1) / self.accumu_steps
-            )  # average num of each frame
             train_loss = []
-            train_num  = []
             # record: progress bar
             pbar.update()
 
@@ -139,7 +133,6 @@ class Trainer:
         )
         # record: tensorboard
         valid_loss = []
-        valid_num  = []
 
         for i, (frames, labels) in enumerate(self.evaluloader):
             # put frames and labels in GPU
@@ -152,17 +145,12 @@ class Trainer:
 
             # record: tensorboard
             valid_loss.append(loss_value.item() / len(predis))
-            valid_num.append(len(torch.nonzero(predis)) / len(predis))
             # record: progress bar
             if (i+1) % self.accumu_steps == 0: pbar.update()
         
         # record: tensorboard
         self.writer.add_scalars(
             'scalars/loss', {'valid': torch.mean(torch.as_tensor(valid_loss))}, 
-            self.epoch * len(self.trainloader) / self.accumu_steps
-        )
-        self.writer.add_scalars(
-            'scalars/numb', {'valid': torch.mean(torch.as_tensor(valid_num))}, 
             self.epoch * len(self.trainloader) / self.accumu_steps
         )
 

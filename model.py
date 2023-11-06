@@ -146,4 +146,4 @@ class ResAttNet(nn.Module):
         x = self.avgpool(x)  # (B, C, 1, 1, 1)
         x = x.view(x.size(0), -1)  # (B, C)
         x = self.fc(x)
-        return x
+        return x.squeeze()
