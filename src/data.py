@@ -15,29 +15,30 @@ from typing import List, Tuple
 
 
 class Patient(Dataset):
-    def __init__(self) -> None:
+    def __init__(
+        self, info_fold: str, cbct_fold: str, tiff_fold: str,
+        min_HU: int, max_HU: int,
+        augmentation: bool, degrees: float, translation: int, std: float
+    ) -> None:
         super(Patient, self).__init__()
-
-        self.info_fold = "D:/tao_ct/tao_ct_info"
-        self.cbct_fold = "D:/tao_ct/tao_ct_desens"
-        self.tiff_fold = "D:/tao_ct/tao_ct_tiff"
-
+        # path
+        self.info_fold = info_fold
+        self.cbct_fold = cbct_fold
+        self.tiff_fold = tiff_fold
         # normalization
-        self.normalization = True
-        self.min_HU = -1000
-        self.max_HU =  5000
-
+        self.min_HU = min_HU
+        self.max_HU = max_HU
         # augmentation
-        self.augmentation = True
+        self.augmentation = augmentation
         self.transform = tio.transforms.Compose([
             tio.RandomFlip(axes=(2,), flip_probability=0.5),
             tio.RandomAffine(
-                scales=0,
-                degrees=(-15, 15),
-                translation=(-20, 20),
+                scales=0, 
+                degrees=degrees, 
+                translation=translation,
                 isotropic=True
             ),
-            tio.RandomNoise(std=(0, 0.01)),
+            tio.RandomNoise(std=std),
         ])
 
         self.name_list = self._getNameList()
@@ -116,8 +117,7 @@ class Patient(Dataset):
         )).float()
 
         # normalization
-        if self.normalization:    
-            tiff = (tiff - self.min_HU) / (self.max_HU - self.min_HU)
+        tiff = (tiff - self.min_HU) / (self.max_HU - self.min_HU)
 
         # augmentation (rotation and translation)
         if self.augmentation:

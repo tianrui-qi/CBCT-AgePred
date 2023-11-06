@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from typing import List
+
 
 class _ChannelAttentionModule(nn.Module):
     def __init__(self, dim: int, in_c: int, ratio: int = 16) -> None:
@@ -103,26 +105,25 @@ class _DualConv(nn.Module):
 
 
 class ResAttNet(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self, feats: List[int], use_cbam: bool, use_res: bool) -> None:
         super(ResAttNet, self).__init__()
-        self.dim   = 3
-        self.feats = [1, 64, 128, 256, 512, 1024]
-        self.use_cbam = True
-        self.use_res  = True
+        self.feats = feats
+        self.use_cbam = use_cbam
+        self.use_res  = use_res
 
         # encoder
         self.encoder = nn.ModuleList([
-                nn.Sequential(
+            nn.Sequential(
                 _DualConv(
-                    self.dim, self.feats[i] , self.feats[i+1], 
+                    3, self.feats[i] , self.feats[i+1], 
                     self.use_cbam, self.use_res
                 ), 
                 _DualConv(
-                    self.dim, self.feats[i+1], self.feats[i+1], 
+                    3, self.feats[i+1], self.feats[i+1], 
                     self.use_cbam, self.use_res
                 ), 
                 _DualConv(
-                    self.dim, self.feats[i+1], self.feats[i+1], 
+                    3, self.feats[i+1], self.feats[i+1], 
                     self.use_cbam, self.use_res
                 )
             ) for i in range(len(self.feats)-1)
@@ -135,7 +136,7 @@ class ResAttNet(nn.Module):
         self.fc = nn.Linear(self.feats[-1], 1)
 
     def forward(self, x: Tensor) -> Tensor:
-        if self.dim == 3: x = x.unsqueeze(1)
+        x = x.unsqueeze(1)
         # encoder
         x = self.encoder[0](x)
         for i in range(0, len(self.feats)-2):
