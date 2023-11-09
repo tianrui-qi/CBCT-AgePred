@@ -128,19 +128,16 @@ class Patients(Dataset):
         if self.augmentation:
             tiff = self.transform(tiff.unsqueeze(0)).squeeze(0)
 
-        # crop or pad to (480 480 480)
+        # crop to (416 416 416)
         if tiff.shape != (440, 536, 536) and tiff.shape != (576, 768, 768):
             raise ValueError(
                 "expect (440, 536, 536) or (576, 768, 768) but got " + 
                 str(tiff.shape)
             )
         elif tiff.shape == (440, 536, 536):
-            # Z : pad from 440 to 480
-            tiff = F.pad(tiff, (0, 0, 0, 0, 20, 20))
-            # HW: crop a (480 480) center region from (536, 536)
-            tiff = tiff[:, 28 : 28+480, 28 : 28+480]
+            tiff = tiff[440-416:440,  0:   416,  60: 60+416]
         elif tiff.shape == (576, 768, 768):
-            tiff = tiff[48:48+480, 50:50+480, 144:144+480]
+            tiff = tiff[576-416:576, 50:50+416, 176:176+416]
 
         return torch.clip(tiff, 0, 1), self.info_list[index]
 

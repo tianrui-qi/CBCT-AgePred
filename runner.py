@@ -76,7 +76,7 @@ class Trainer:
             unit="epoch", initial=self.epoch
         ):
             self._train_epoch()
-            if (self.epoch+1) % self.evalu_frequency != 0: continue
+            if self.epoch % self.evalu_frequency != 0: continue
             self._valid_epoch()
             self._update_lr()
             self._save_ckpt()

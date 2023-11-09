@@ -9,25 +9,25 @@ class Config:
             "min_HU": -1000,
             "max_HU":  5000,
             # augmentation
-            "degrees": 15.0,
-            "translation": 20,
+            "degrees": 10.0,
+            "translation": 10,
             "std": 0.01
         }
         self.model_config = {
             "feats": [1, 16, 32, 64, 128, 256, 512],
-            "use_cbam": False,
+            "use_cbam": True,
             "use_res" : True
         }
         self.runner_config = {
             "max_epoch"      : 10000,
             "accumu_steps"   : 1,   # unit: batch
-            "evalu_frequency": 10,  # unit: epoch
+            "evalu_frequency": 5,  # unit: epoch
             # data
             "train_num" : 160,
             "batch_size": 8,
             "num_workers": 32,
             # path
-            "ckpt_save_fold": "/data/nanomega/projects/shanghai_tao/ckpt",
+            "ckpt_save_fold": "/data/nanomega/projects/shanghai_tao/ckpt/02",
             "ckpt_load_path": "",
             "ckpt_load_lr"  : False,
             # optimizer
