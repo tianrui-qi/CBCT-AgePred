@@ -1,3 +1,5 @@
+import torch
+import torch.cuda
 import torch.backends.cudnn
 
 import numpy as np
@@ -28,15 +30,9 @@ def set_seed(seed):
 
 if __name__ == "__main__":
     set_seed(42)
-
     cfg = config.Config()
-    # data
-    patients = data.Patients(**cfg.data_config)
-    # model
-    resattnet = model.ResAttNet(**cfg.model_config)
-    # runner
     trainer = runner.Trainer(
-        dataset=patients, model=resattnet, **cfg.runner_config
-    )
-
-    trainer.fit()
+        dataset=data.Patients(**cfg.data_config), 
+        model=model.ResAttNet(**cfg.model_config), 
+        **cfg.runner_config
+    ).fit()
