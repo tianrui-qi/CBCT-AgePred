@@ -30,8 +30,8 @@ class Config:
             "ckpt_load_lr"  : False,
             # data
             "train_percent": 0.7,
-            "batch_size" : 4,
-            "num_workers": 16,
+            "batch_size" : 8,
+            "num_workers": 32,
             # optimizer
             "lr"   : 1e-3,
             "gamma": 0.95
