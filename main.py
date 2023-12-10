@@ -32,7 +32,7 @@ if __name__ == "__main__":
     set_seed(42)
     cfg = config.Config()
     trainer = runner.Trainer(
-        dataset=data.Patients(**cfg.data_config), 
-        model=model.ResAttNet(**cfg.model_config), 
-        **cfg.runner_config
+        dataset=data.Patients(**cfg.Patients), 
+        model=model.ResAttNet(**cfg.ResAttNet), 
+        **cfg.Trainer
     ).fit()

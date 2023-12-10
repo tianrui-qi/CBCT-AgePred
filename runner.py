@@ -10,12 +10,15 @@ import os
 
 import tqdm
 
+import data
+
 
 class Trainer:
     def __init__(
         self, max_epoch: int, accumu_steps: int, evalu_frequency: int,
         ckpt_save_fold: str, ckpt_load_path: str, ckpt_load_lr: bool,
-        dataset: Dataset, train_num: int, batch_size: int, num_workers: int,
+        dataset: data.Patients, 
+        train_percent: float, batch_size: int, num_workers: int,
         model: nn.Module, lr: float, gamma: float
     ) -> None:
         self.device = "cuda"
@@ -27,7 +30,8 @@ class Trainer:
         self.ckpt_load_path = ckpt_load_path
         self.ckpt_load_lr   = ckpt_load_lr
 
-        # dataset
+        # data
+        train_num = int(train_percent * len(dataset))
         trainset, evaluset = random_split(
             dataset, [train_num, len(dataset) - train_num]
         )
