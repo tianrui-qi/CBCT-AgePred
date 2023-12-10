@@ -2,14 +2,17 @@ import numpy as np
 import pydicom
 import tifffile
 import os
+import re
 import json
 import shutil
+
 import tqdm
+from typing import List
 
 
-def getNameList(profile_path: str, cbct_path: str):
+def getNameList(profile_path: str, cbct_fold: str) -> List[str]:
     profile = {}
-    name_list = os.listdir(cbct_path)
+    name_list = os.listdir(cbct_fold)
 
     # get the profile dictionary where key is shape of CBCT and value is list of 
     # corresponding patient name
@@ -21,20 +24,20 @@ def getNameList(profile_path: str, cbct_path: str):
         profile = {eval(key): value for key, value in profile_convert.items()}
     else:
         # if profile.json do not exist, read cbct of all patient and create new
-        name_list = os.listdir(cbct_path)
+        name_list = os.listdir(cbct_fold)
         for i in tqdm.tqdm(range(len(name_list)), desc="getNameList"):
             # path for current patient
-            cbct_path_curr = os.path.join(cbct_path, name_list[i])
+            cbct_path = os.path.join(cbct_fold, name_list[i])
             # get D
             D = 0
-            for file in os.listdir(cbct_path_curr):
+            for file in os.listdir(cbct_path):
                 if file.startswith("CT"): D += 1
             # get the H and W
             H, W = 0, 0
-            for file in os.listdir(cbct_path_curr):
+            for file in os.listdir(cbct_path):
                 if file.startswith("CT"):
                     dcm_file = pydicom.dcmread(
-                        os.path.join(cbct_path_curr, file)
+                        os.path.join(cbct_path, file)
                     ).pixel_array
                     (H, W) = dcm_file.shape
                     break
@@ -64,32 +67,56 @@ def getNameList(profile_path: str, cbct_path: str):
     return name_list
 
 
-if __name__ == "__main__":
-    name_list = getNameList(
-        profile_path="/nanolab/profile.json", cbct_path="/nanolab/cbct"
-    )
+def transfer(
+    name_list, 
+    cbct_fold_src: str, info_fold_src: str, 
+    tiff_fold_dst: str, info_fold_dst: str,
+) -> None:
+    if not os.path.exists(tiff_fold_dst): os.makedirs(tiff_fold_dst)
+    if not os.path.exists(info_fold_dst): os.makedirs(info_fold_dst)
 
-    data_disk = "/data/nanomega/data/"
-    tiff_fold = data_disk + "tiff/"
-    info_fold = data_disk + "info/"
-    if not os.path.exists(tiff_fold): os.makedirs(tiff_fold)
-    if not os.path.exists(info_fold): os.makedirs(info_fold)
-
-    for name in tqdm.tqdm(name_list[7:1006]):
+    for name in tqdm.tqdm(name_list, smoothing=0, unit="patients"):
         # info
         shutil.copy(
-            "/nanolab/info/{}.txt".format(name), 
-            info_fold + "{}.txt".format(name)
+            os.path.join(info_fold_src, "{}.txt".format(name)), 
+            os.path.join(info_fold_dst, "{}.txt".format(name))
         )
+
+        # get file list of cbct
+        file_list = os.listdir(os.path.join(cbct_fold_src, name))
+        def extract_number(filename):
+            # extract the number before '.dcm' and after the last period
+            match = re.search(r'\.(\d+)\.dcm$', filename)
+            if match: return int(match.group(1))
+            else: return None
+        file_list = sorted(file_list, key=extract_number)
+
         # read cbct layer by layer
         frame = []
-        file_list = os.listdir("/nanolab/cbct/{}".format(name))
         for file in file_list:
             if not file.startswith("CT"): continue
             dcm_file = pydicom.dcmread(
-                os.path.join("/nanolab/cbct/{}".format(name), file)
+                os.path.join(cbct_fold_src, name, file)
             )
             frame.append(dcm_file.pixel_array)
         frame = np.stack(frame)
+
         # save tiff
-        tifffile.imwrite(tiff_fold + "{}.tif".format(name), frame)
+        tifffile.imwrite(
+            os.path.join(tiff_fold_dst, "{}.tif".format(name)), frame
+        )
+
+
+if __name__ == "__main__":
+    # filtered name_list
+    name_list = getNameList(
+        profile_path="/nanolab/profile.json", cbct_fold="/nanolab/cbct/"
+    )
+    # transfer part of name_list patient from src to dst
+    transfer(
+        name_list[1006*0:1006*1],
+        cbct_fold_src="/nanolab/cbct/",
+        info_fold_src="/nanolab/info/",
+        tiff_fold_dst="/data/nanomega/data/tiff/",
+        info_fold_dst="/data/nanomega/data/info/",
+    )
