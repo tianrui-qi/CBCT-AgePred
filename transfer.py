@@ -114,7 +114,7 @@ if __name__ == "__main__":
     )
     # transfer part of name_list patient from src to dst
     transfer(
-        name_list[1006*0:1006*1],
+        name_list[1006*1:1006*2],
         cbct_fold_src="/nanolab/cbct/",
         info_fold_src="/nanolab/info/",
         tiff_fold_dst="/data/nanomega/data/tiff/",

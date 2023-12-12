@@ -23,10 +23,10 @@ class Config:
         self.Trainer = {
             "max_epoch"      : 800,
             "accumu_steps"   : 1,   # unit: batch
-            "evalu_frequency": 5,   # unit: epoch
+            "evalu_frequency": 1,   # unit: epoch
             # path
             "ckpt_save_fold": self.ckpt_disk + "04",
-            "ckpt_load_path": "",
+            "ckpt_load_path": "/data/nanomega/ckpt/04/20",
             "ckpt_load_lr"  : False,
             # data
             "train_percent": 0.7,
