@@ -19,7 +19,7 @@ class Trainer:
         ckpt_save_fold: str, ckpt_load_path: str, ckpt_load_lr: bool,
         dataset: data.Patients, 
         train_percent: float, batch_size: int, num_workers: int,
-        model: nn.Module, lr: float, gamma: float
+        model: nn.Module, lr: float
     ) -> None:
         self.device = "cuda"
         self.max_epoch = max_epoch
@@ -57,9 +57,7 @@ class Trainer:
         # optimizer
         self.scaler    = amp.GradScaler()  # type: ignore
         self.optimizer = optim.Adam(self.model.parameters(), lr=lr)
-        self.scheduler = lr_scheduler.ExponentialLR(
-            self.optimizer, gamma=gamma
-        )
+        self.scheduler = lr_scheduler.ExponentialLR(self.optimizer, gamma=0.95)
         # recorder
         self.writer = writer.SummaryWriter()
 
@@ -67,10 +65,12 @@ class Trainer:
         self.epoch = 1  # epoch index may update in load_ckpt()
 
         # print model info
+        """
         para_num = sum(
             p.numel() for p in self.model.parameters() if p.requires_grad
         )
         print(f'The model has {para_num:,} trainable parameters')
+        """
 
     def fit(self) -> None:
         self._load_ckpt()

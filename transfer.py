@@ -108,15 +108,19 @@ def transfer(
 
 
 if __name__ == "__main__":
+    src = "/nanolab/CBCT-AgePred/data/"
+    dst = "/leapslab/CBCT-AgePred/data/"
+    part = 6
     # filtered name_list
     name_list = getNameList(
-        profile_path="/nanolab/profile.json", cbct_fold="/nanolab/cbct/"
+        profile_path=os.path.join(src, "profile.json"), 
+        cbct_fold=os.path.join(src, "cbct/"),
     )
     # transfer part of name_list patient from src to dst
     transfer(
-        name_list[1006*1:1006*2],
-        cbct_fold_src="/nanolab/cbct/",
-        info_fold_src="/nanolab/info/",
-        tiff_fold_dst="/data/nanomega/data/tiff/",
-        info_fold_dst="/data/nanomega/data/info/",
+        name_list[1006*part:1006*(part+1)],
+        cbct_fold_src=os.path.join(src, "cbct/"),
+        info_fold_src=os.path.join(src, "info/"),
+        tiff_fold_dst=os.path.join(dst, "tiff/"),
+        info_fold_dst=os.path.join(dst, "info/"),
     )

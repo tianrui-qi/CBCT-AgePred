@@ -1,7 +1,7 @@
 class Config:
     def __init__(self):
-        self.ckpt_disk: str = "/data/nanomega/ckpt/"
-        self.data_disk: str = "/data/nanomega/data/"
+        self.ckpt_disk: str = "ckpt/"
+        self.data_disk: str = "data/"
         self.Patients = {
             # path
             "cbct_fold": self.data_disk + "cbct/",
@@ -25,14 +25,13 @@ class Config:
             "accumu_steps"   : 1,   # unit: batch
             "evalu_frequency": 1,   # unit: epoch
             # path
-            "ckpt_save_fold": self.ckpt_disk + "04",
-            "ckpt_load_path": "/data/nanomega/ckpt/04/20",
+            "ckpt_save_fold": self.ckpt_disk + "05",
+            "ckpt_load_path": "",
             "ckpt_load_lr"  : False,
             # data
             "train_percent": 0.7,
-            "batch_size" : 8,
-            "num_workers": 32,
+            "batch_size" : 4,
+            "num_workers": 16,
             # optimizer
             "lr"   : 1e-3,
-            "gamma": 0.95
         }
