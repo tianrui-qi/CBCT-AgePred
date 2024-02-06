@@ -52,17 +52,15 @@ def getNameList(profile_path: str, cbct_fold: str) -> List[str]:
 
     # use profile dictionary to remove the patients with unexpected shape
     for key in profile:
-        if len(profile[key]) < 2000:
+        if len(profile[key]) < 10:
             for value in profile[key]:
                 name_list.remove(value)
 
     # print infomation of profile and name list
-    """
     for key in profile: 
-        if len(profile[key]) < 0: print(key, profile[key])
+        if len(profile[key]) < 10: print(key, profile[key])
         else: print(key, len(profile[key]))
-    print(len(name_list))
-    """
+    print("number of sample after filter: {}".format(len(name_list)))
 
     return name_list
 
@@ -77,10 +75,13 @@ def transfer(
 
     for name in tqdm.tqdm(name_list, smoothing=0, unit="patients"):
         # info
-        shutil.copy(
-            os.path.join(info_fold_src, "{}.txt".format(name)), 
-            os.path.join(info_fold_dst, "{}.txt".format(name))
-        )
+        try:
+            shutil.copy(
+                os.path.join(info_fold_src, "{}.txt".format(name)), 
+                os.path.join(info_fold_dst, "{}.txt".format(name))
+            )
+        except shutil.SameFileError:
+            pass
 
         # get file list of cbct
         file_list = os.listdir(os.path.join(cbct_fold_src, name))
@@ -108,9 +109,9 @@ def transfer(
 
 
 if __name__ == "__main__":
-    src = "/nanolab/CBCT-AgePred/data/"
-    dst = "/leapslab/CBCT-AgePred/data/"
-    part = 6
+    src = "D:/CBCT-AgePred/"
+    dst = "D:/CBCT-AgePred/"
+    part = 0
     # filtered name_list
     name_list = getNameList(
         profile_path=os.path.join(src, "profile.json"), 
