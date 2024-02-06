@@ -1,11 +1,8 @@
 import torch
 import torch.nn as nn
-from torch import Tensor
 
 from einops import rearrange, repeat
 from einops.layers.torch import Rearrange
-
-from typing import List
 
 __all__ = ["ViT"]
 
