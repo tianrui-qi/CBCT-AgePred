@@ -10,7 +10,28 @@ import tqdm
 from typing import List
 
 
-def getNameList(profile_path: str, cbct_fold: str) -> List[str]:
+def getNameList(
+    profile_path: str, cbct_fold: str, filter: int = 10
+) -> List[str]:
+    """
+    Go through the CBCT folder and get the shape of each patient's CBCT.
+    Store key as shape and value as list of patient name with that shape in
+    a dictionary. Save that dictionary as profile.json so that we do not need
+    to go through the CBCT folder again next time. Then use the profile
+    dictionary to filtering out patients with unexpected shapes, i.e., the
+    number of patients with the same shape is less than input filter.
+
+    Args:
+        profile_path (str): The path to the profile JSON file.
+        cbct_fold (str): The path to the CBCT folder.
+        filter (int): The minimum number of patients with the same shape to
+        not be filtered out. Defaults to 10.
+
+    Returns:
+        List[str]: A list of patient names same to that in CBCT folder after
+        filtering.
+    """
+
     profile = {}
     name_list = os.listdir(cbct_fold)
 
@@ -52,13 +73,13 @@ def getNameList(profile_path: str, cbct_fold: str) -> List[str]:
 
     # use profile dictionary to remove the patients with unexpected shape
     for key in profile:
-        if len(profile[key]) < 10:
+        if len(profile[key]) < filter:
             for value in profile[key]:
                 name_list.remove(value)
 
     # print infomation of profile and name list
     for key in profile: 
-        if len(profile[key]) < 10: print(key, profile[key])
+        if len(profile[key]) < filter: print(key, profile[key])
         else: print(key, len(profile[key]))
     print("number of sample after filter: {}".format(len(name_list)))
 
@@ -70,6 +91,20 @@ def transfer(
     cbct_fold_src: str, info_fold_src: str, 
     tiff_fold_dst: str, info_fold_dst: str,
 ) -> None:
+    """
+    From the source directory, for each patient, we read CBCT images layer by 
+    layer and save them as TIFF images in the destination directory. We also
+    copy the info file of each patient from the source directory to the
+    destination directory. Note that the copy of info file will be skipped if
+    input info_fold_src and info_fold_dst are the same.
+
+    Args:
+        name_list (list): List of patient names after filtering.
+        cbct_fold_src (str): Source directory containing CBCT images.
+        info_fold_src (str): Source directory containing info files.
+        tiff_fold_dst (str): Destination directory to save TIFF images.
+        info_fold_dst (str): Destination directory to save info files.
+    """
     if not os.path.exists(tiff_fold_dst): os.makedirs(tiff_fold_dst)
     if not os.path.exists(info_fold_dst): os.makedirs(info_fold_dst)
 
@@ -116,6 +151,7 @@ if __name__ == "__main__":
     name_list = getNameList(
         profile_path=os.path.join(src, "profile.json"), 
         cbct_fold=os.path.join(src, "cbct/"),
+        filter=10
     )
     # transfer part of name_list patient from src to dst
     transfer(
