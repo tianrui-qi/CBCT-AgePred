@@ -33,6 +33,6 @@ if __name__ == "__main__":
     cfg = config.Config()
     trainer = runner.Trainer(
         dataset=data.Patients(**cfg.Patients), 
-        model=model.ResAttNet(**cfg.ResAttNet), 
+        model=model.ViT(**cfg.ViT),
         **cfg.Trainer
     ).fit()

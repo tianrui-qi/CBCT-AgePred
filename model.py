@@ -2,148 +2,144 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from einops import rearrange, repeat
+from einops.layers.torch import Rearrange
+
 from typing import List
 
+__all__ = ["ViT"]
 
-class _ChannelAttentionModule(nn.Module):
-    def __init__(self, dim: int, in_c: int, ratio: int = 16) -> None:
-        super(_ChannelAttentionModule, self).__init__()
-        if   dim == 2: 
-            Conv = nn.Conv2d
-            AdaptiveAvgPool = nn.AdaptiveAvgPool2d
-            AdaptiveMaxPool = nn.AdaptiveMaxPool2d
-        elif dim == 3:
-            Conv = nn.Conv3d
-            AdaptiveAvgPool = nn.AdaptiveAvgPool3d
-            AdaptiveMaxPool = nn.AdaptiveMaxPool3d
-        else: raise ValueError("dim must be 2 or 3")
 
-        self.avg_pool = AdaptiveAvgPool(1)
-        self.max_pool = AdaptiveMaxPool(1)
-        self.MLP = nn.Sequential(
-            Conv(in_c, in_c // ratio, 1, bias=False),
-            nn.ReLU(inplace=True),
-            Conv(in_c // ratio, in_c, 1, bias=False)
+def _pair(t):
+    return t if isinstance(t, tuple) else (t, t)
+
+
+class _FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout = 0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
         )
-        self.sigmoid = nn.Sigmoid()
+    def forward(self, x):
+        return self.net(x)
 
-    def forward(self, x: Tensor) -> Tensor:
-        return self.sigmoid(
-            self.MLP(self.avg_pool(x)) + self.MLP(self.max_pool(x))
+
+class _Attention(nn.Module):
+    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
+        super().__init__()
+        inner_dim = dim_head *  heads
+        project_out = not (heads == 1 and dim_head == dim)
+
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+
+        self.norm = nn.LayerNorm(dim)
+        self.attend = nn.Softmax(dim = -1)
+        self.dropout = nn.Dropout(dropout)
+
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
+
+        self.to_out = nn.Sequential(
+            nn.Linear(inner_dim, dim),
+            nn.Dropout(dropout)
+        ) if project_out else nn.Identity()
+
+    def forward(self, x):
+        x = self.norm(x)
+        qkv = self.to_qkv(x).chunk(3, dim = -1)
+        q, k, v = map(
+            lambda t: rearrange(t, 'b n (h d) -> b h n d', h = self.heads), qkv
         )
 
+        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
 
-class _SpatialAttentionModule(nn.Module):
-    def __init__(self, dim: int, kernel_size: int = 7) -> None:
-        super(_SpatialAttentionModule, self).__init__()
-        if   dim == 2: Conv = nn.Conv2d
-        elif dim == 3: Conv = nn.Conv3d
-        else: raise ValueError("dim must be 2 or 3")
+        attn = self.attend(dots)
+        attn = self.dropout(attn)
 
-        self.conv = Conv(2, 1, kernel_size, padding=kernel_size//2, bias=False)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x: Tensor) -> Tensor:
-        avgout = torch.mean(x, dim=1, keepdim=True)
-        maxout, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avgout, maxout], dim=1)
-        x = self.conv(x)
-        return self.sigmoid(x)
+        out = torch.matmul(attn, v)
+        out = rearrange(out, 'b h n d -> b n (h d)')
+        return self.to_out(out)
 
 
-class _DualConv(nn.Module):
+class _Transformer(nn.Module):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
+        super().__init__()
+        self.layers = nn.ModuleList([])
+        for _ in range(depth):
+            self.layers.append(nn.ModuleList([
+                _Attention(
+                    dim, heads = heads, dim_head = dim_head, dropout = dropout
+                ),
+                _FeedForward(dim, mlp_dim, dropout = dropout)
+            ]))
+    def forward(self, x):
+        for attn, ff in self.layers:
+            x = attn(x) + x
+            x = ff(x) + x
+        return x
+
+
+class ViT(nn.Module):
     def __init__(
-        self, dim: int, in_c: int, out_c: int, 
-        use_cbam: bool = False, use_res: bool = False
-    ) -> None:
-        super(_DualConv, self).__init__()
-        self.use_cbam = use_cbam
-        self.use_res  = use_res
+        self, *, image_size, image_patch_size, frames, frame_patch_size, 
+        num_classes, dim, depth, heads, mlp_dim, pool = 'cls', channels = 3, 
+        dim_head = 64, dropout = 0., emb_dropout = 0.
+    ):
+        super().__init__()
+        image_height, image_width = _pair(image_size)
+        patch_height, patch_width = _pair(image_patch_size)
 
-        if   dim == 2: Conv, BatchNorm = nn.Conv2d, nn.BatchNorm2d
-        elif dim == 3: Conv, BatchNorm = nn.Conv3d, nn.BatchNorm3d
-        else: raise ValueError("dim must be 2 or 3")
+        assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
+        assert frames % frame_patch_size == 0, 'Frames must be divisible by frame patch size'
 
-        # dual convolution
-        self.conv1 = nn.Sequential(
-            Conv(in_c, out_c, 3, padding=1, bias=False),
-            BatchNorm(out_c)
+        num_patches = (image_height // patch_height) * (image_width // patch_width) * (frames // frame_patch_size)
+        patch_dim = channels * patch_height * patch_width * frame_patch_size
+
+        assert pool in {'cls', 'mean'}, 'pool type must be either cls (cls token) or mean (mean pooling)'
+
+        self.to_patch_embedding = nn.Sequential(
+            Rearrange(
+                'b c (f pf) (h p1) (w p2) -> b (f h w) (p1 p2 pf c)', 
+                p1 = patch_height, p2 = patch_width, pf = frame_patch_size
+            ),
+            nn.LayerNorm(patch_dim),
+            nn.Linear(patch_dim, dim),
+            nn.LayerNorm(dim),
         )
-        self.conv2 = nn.Sequential(
-            Conv(out_c, out_c, 3, padding=1, bias=False),
-            BatchNorm(out_c)
+
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches + 1, dim))
+        self.cls_token = nn.Parameter(torch.randn(1, 1, dim))
+        self.dropout = nn.Dropout(emb_dropout)
+
+        self.transformer = _Transformer(
+            dim, depth, heads, dim_head, mlp_dim, dropout
         )
-        self.relu = nn.ReLU(inplace=True)
 
-        # cbam
-        if self.use_cbam:
-            self.channel_attention = _ChannelAttentionModule(dim, out_c)
-            self.spatial_attention = _SpatialAttentionModule(dim)
+        self.pool = pool
+        self.to_latent = nn.Identity()
 
-        # residual
-        if self.use_res:
-            if in_c == out_c:
-                self.skip = nn.Identity()
-            else:
-                self.skip = nn.Sequential(
-                    Conv(in_c, out_c, 1, bias=False),
-                    BatchNorm(out_c),
-                )
+        self.mlp_head = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, num_classes)
+        )
 
-    def forward(self, x: Tensor) -> Tensor:
-        if self.use_res: 
-            res = x
-        x = self.conv1(x)
-        x = self.relu(x)
-        x = self.conv2(x)
-        if self.use_cbam: 
-            x = self.channel_attention(x) * x
-            x = self.spatial_attention(x) * x
-        if self.use_res: 
-            x += self.skip(res)  # type: ignore
-        return self.relu(x)
+    def forward(self, video):
+        x = self.to_patch_embedding(video)
+        b, n, _ = x.shape
 
+        cls_tokens = repeat(self.cls_token, '1 1 d -> b 1 d', b = b)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x += self.pos_embedding[:, :(n + 1)]
+        x = self.dropout(x)
 
-class ResAttNet(nn.Module):
-    def __init__(self, feats: List[int], use_cbam: bool, use_res: bool) -> None:
-        super(ResAttNet, self).__init__()
-        self.feats = feats
-        self.use_cbam = use_cbam
-        self.use_res  = use_res
+        x = self.transformer(x)
 
-        # encoder
-        self.encoder = nn.ModuleList([
-            nn.Sequential(
-                _DualConv(
-                    3, self.feats[i] , self.feats[i+1], 
-                    self.use_cbam, self.use_res
-                ), 
-                _DualConv(
-                    3, self.feats[i+1], self.feats[i+1], 
-                    self.use_cbam, self.use_res
-                ), 
-                _DualConv(
-                    3, self.feats[i+1], self.feats[i+1], 
-                    self.use_cbam, self.use_res
-                )
-            ) for i in range(len(self.feats)-1)
-        ])
-        self.maxpool = nn.ModuleList([
-            nn.MaxPool3d(2) for _ in range(len(self.feats)-2)
-        ])
-        # output
-        self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
-        self.fc = nn.Linear(self.feats[-1], 1)
+        x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
 
-    def forward(self, x: Tensor) -> Tensor:
-        x = x.unsqueeze(1)
-        # encoder
-        x = self.encoder[0](x)
-        for i in range(0, len(self.feats)-2):
-            x = self.maxpool[ i ](x)
-            x = self.encoder[i+1](x)
-        # output
-        x = self.avgpool(x)  # (B, C, 1, 1, 1)
-        x = x.view(x.size(0), -1)  # (B, C)
-        x = self.fc(x)
-        return x.squeeze()
+        x = self.to_latent(x)
+        return self.mlp_head(x)
