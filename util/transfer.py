@@ -10,6 +10,9 @@ import tqdm
 from typing import List
 
 
+__all__ = []
+
+
 def getNameList(
     profile_path: str, cbct_fold: str, filter: int = 10
 ) -> List[str]:

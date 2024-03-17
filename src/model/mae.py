@@ -56,10 +56,13 @@ class MAE(nn.Module):
         elif self.encoder.pool == "mean":
             tokens += self.encoder.pos_embedding.to(device, dtype=tokens.dtype) 
 
-        # calculate of patches needed to be masked, and get random indices, dividing it up for mask vs unmasked
+        # calculate of patches needed to be masked, and get random indices, 
+        # dividing it up for mask vs unmasked
 
         num_masked = int(self.masking_ratio * num_patches)
-        rand_indices = torch.rand(batch, num_patches, device = device).argsort(dim = -1)
+        rand_indices = torch.rand(
+            batch, num_patches, device = device
+        ).argsort(dim = -1)
         masked_indices, unmasked_indices = rand_indices[:, :num_masked], rand_indices[:, num_masked:]
 
         # get the unmasked tokens to be encoded
@@ -94,7 +97,9 @@ class MAE(nn.Module):
 
         # concat the masked tokens to the decoder tokens and attend with decoder
         
-        decoder_tokens = torch.zeros(batch, num_patches, self.decoder_dim, device=device)
+        decoder_tokens = torch.zeros(
+            batch, num_patches, self.decoder_dim, device=device
+        )
         decoder_tokens[batch_range, unmasked_indices] = unmasked_decoder_tokens
         decoder_tokens[batch_range, masked_indices] = mask_tokens
         decoded_tokens = self.decoder(decoder_tokens)
@@ -117,7 +122,9 @@ class _Transformer(nn.Module):
         self.layers = nn.ModuleList([])
         for _ in range(depth):
             self.layers.append(nn.ModuleList([
-                _Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout),
+                _Attention(
+                    dim, heads = heads, dim_head = dim_head, dropout = dropout
+                ),
                 _FeedForward(dim, mlp_dim, dropout = dropout)
             ]))
 
@@ -154,9 +161,11 @@ class _Attention(nn.Module):
         x = self.norm(x)
 
         qkv = self.to_qkv(x).chunk(3, dim = -1)
-        q, k, v = map(lambda t: einops.rearrange(
-            t, 'b n (h d) -> b h n d', h = self.heads
-        ), qkv)
+        q, k, v = map(
+            lambda t: einops.rearrange(
+                t, 'b n (h d) -> b h n d', h = self.heads
+            ), qkv
+        )
 
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
 
