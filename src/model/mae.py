@@ -1,9 +1,10 @@
 import torch
 from torch import nn
 import torch.nn.functional as F
-from einops import repeat
+import einops
 
-from .vit import Transformer
+
+__all__ = []
 
 
 class MAE(nn.Module):
@@ -35,7 +36,7 @@ class MAE(nn.Module):
         self.decoder_dim = decoder_dim
         self.enc_to_dec = nn.Linear(encoder_dim, decoder_dim) if encoder_dim != decoder_dim else nn.Identity()
         self.mask_token = nn.Parameter(torch.randn(decoder_dim))
-        self.decoder = Transformer(dim = decoder_dim, depth = decoder_depth, heads = decoder_heads, dim_head = decoder_dim_head, mlp_dim = decoder_dim * 4)
+        self.decoder = _Transformer(dim = decoder_dim, depth = decoder_depth, heads = decoder_heads, dim_head = decoder_dim_head, mlp_dim = decoder_dim * 4)
         self.decoder_pos_emb = nn.Embedding(num_patches, decoder_dim)
         self.to_pixels = nn.Linear(decoder_dim, pixel_values_per_patch)
 
@@ -74,7 +75,8 @@ class MAE(nn.Module):
 
         encoded_tokens = self.encoder.transformer(tokens)
 
-        # project encoder to decoder dimensions, if they are not equal - the paper says you can get away with a smaller dimension for decoder
+        # project encoder to decoder dimensions, if they are not equal - the 
+        # paper says you can get away with a smaller dimension for decoder
 
         decoder_tokens = self.enc_to_dec(encoded_tokens)
 
@@ -82,9 +84,12 @@ class MAE(nn.Module):
 
         unmasked_decoder_tokens = decoder_tokens + self.decoder_pos_emb(unmasked_indices)
 
-        # repeat mask tokens for number of masked, and add the positions using the masked indices derived above
+        # repeat mask tokens for number of masked, and add the positions using 
+        # the masked indices derived above
 
-        mask_tokens = repeat(self.mask_token, 'd -> b n d', b = batch, n = num_masked)
+        mask_tokens = einops.repeat(
+            self.mask_token, 'd -> b n d', b = batch, n = num_masked
+        )
         mask_tokens = mask_tokens + self.decoder_pos_emb(masked_indices)
 
         # concat the masked tokens to the decoder tokens and attend with decoder
@@ -103,3 +108,77 @@ class MAE(nn.Module):
 
         recon_loss = F.mse_loss(pred_pixel_values, masked_patches)
         return recon_loss
+
+
+class _Transformer(nn.Module):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout = 0.):
+        super().__init__()
+        self.norm = nn.LayerNorm(dim)
+        self.layers = nn.ModuleList([])
+        for _ in range(depth):
+            self.layers.append(nn.ModuleList([
+                _Attention(dim, heads = heads, dim_head = dim_head, dropout = dropout),
+                _FeedForward(dim, mlp_dim, dropout = dropout)
+            ]))
+
+    def forward(self, x):
+        for attn, ff in self.layers:
+            x = attn(x) + x
+            x = ff(x) + x
+
+        return self.norm(x)
+
+
+class _Attention(nn.Module):
+    def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
+        super().__init__()
+        inner_dim = dim_head *  heads
+        project_out = not (heads == 1 and dim_head == dim)
+
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+
+        self.norm = nn.LayerNorm(dim)
+
+        self.attend = nn.Softmax(dim = -1)
+        self.dropout = nn.Dropout(dropout)
+
+        self.to_qkv = nn.Linear(dim, inner_dim * 3, bias = False)
+
+        self.to_out = nn.Sequential(
+            nn.Linear(inner_dim, dim),
+            nn.Dropout(dropout)
+        ) if project_out else nn.Identity()
+
+    def forward(self, x):
+        x = self.norm(x)
+
+        qkv = self.to_qkv(x).chunk(3, dim = -1)
+        q, k, v = map(lambda t: einops.rearrange(
+            t, 'b n (h d) -> b h n d', h = self.heads
+        ), qkv)
+
+        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+
+        attn = self.attend(dots)
+        attn = self.dropout(attn)
+
+        out = torch.matmul(attn, v)
+        out = einops.rearrange(out, 'b h n d -> b n (h d)')
+        return self.to_out(out)
+
+
+class _FeedForward(nn.Module):
+    def __init__(self, dim, hidden_dim, dropout = 0.):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.LayerNorm(dim),
+            nn.Linear(dim, hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout),
+            nn.Linear(hidden_dim, dim),
+            nn.Dropout(dropout)
+        )
+
+    def forward(self, x):
+        return self.net(x)
