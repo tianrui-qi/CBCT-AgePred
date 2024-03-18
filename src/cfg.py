@@ -11,7 +11,7 @@ class PretrainConfig:
     def __init__(self) -> None:
         self.trainset = {   # src.data.PretrainDataset
             # dim
-            "num_sample": 10,
+            "num_sample": 1000,
             "num_sampling": 100,
             "dim": [160, 160, 160],
             # profile
@@ -53,6 +53,18 @@ class PretrainConfig:
                 "decoder_heads": 8,
             },
         }
+        self.trainer = {
+            # train
+            "max_epoch": -1,
+            "accumu_steps": 100,
+            # data
+            "batch_size": 10,
+            "num_workers": 5,
+            # recoder
+            "version": "pretrain",  # None to use pl default version control
+            "save_top_k": 5,
+            "ckpt_load_path": None,
+        }
 
 
 class FinetuneConfig:
@@ -71,15 +83,21 @@ class FinetuneConfig:
             # profile
             "profile_load_path": profile_valid_path,
         }
-
-
-class Config:
-    def __init__(self):
-        self.MInterface = {
-            "fc_kwargs": {
-                "feats": [4096, 4096, 2048, 2048, 1]
+        self.model = {
+            "lr": 5e-4,
+            "T_max": 15,                    # for cosine annealing
+            "vit_kwargs": {
+                "image_size": 160,          # D
+                "frames": 160,              # H and W
+                "image_patch_size": 16,     # D patch size
+                "frame_patch_size": 16,     # H and W patch size
+                "num_classes": 4096,        # 16 * 16 * 16
+                "dim": 1024,
+                "depth": 6,
+                "heads": 8,
+                "mlp_dim": 2048,
+                "channels": 1,
+                "dropout": 0.1,    
+                "emb_dropout": 0.1,   
             },
-        }
-        self.Trainer = {
-            "accumulate_grad_batches": 128,
         }
