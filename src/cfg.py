@@ -30,8 +30,7 @@ class PretrainConfig:
             "degrees": None,
         }
         self.model = {
-            "lr": 5e-4,
-            "T_max": 15,                    # for cosine annealing
+            "lr": 1e-5,
             "vit_kwargs": {
                 "image_size": 160,          # D
                 "frames": 160,              # H and W
@@ -61,9 +60,10 @@ class PretrainConfig:
             "batch_size": 10,
             "num_workers": 5,
             # recoder
-            "version": "pretrain",  # None to use pl default version control
+            "version": "pretrain2",     # None to use pl default version control
             "save_top_k": 5,
-            "ckpt_load_path": None,
+            "ckpt_load_path": "ckpt/pretrain1/epoch=25-step=2600.ckpt",
+            "ckpt_load_lr": False,
         }
 
 

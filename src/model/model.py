@@ -12,12 +12,13 @@ __all__ = ["PretrainModel", "FinetuneModel"]
 
 class PretrainModel(L.LightningModule):
     def __init__(
-        self, lr: float, T_max: int,
+        self, lr: float, 
         vit_kwargs: dict[str, any], mae_kwargs: dict[str, any],
     ):
         super().__init__()
         self.lr = lr
-        self.T_max = T_max
+        self.vit_kwargs = vit_kwargs
+        self.mae_kwargs = mae_kwargs
         # model
         self.vit = ViT3D(**vit_kwargs)
         self.mae = MAE(encoder=self.vit, **mae_kwargs)
@@ -42,22 +43,21 @@ class PretrainModel(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        # cheduler = torch.optim.lr_scheduler.ExponentialLR(
-        #     self.optimizer, gamma=0.95
-        # )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.T_max, eta_min=1e-10
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=0.95
         )
+        #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #    optimizer, T_max=self.T_max, eta_min=1e-10
+        #)
         return [optimizer], [scheduler]
 
 
 class FinetuneModel(L.LightningModule):
     def __init__(
-        self, lr: float, T_max: int,
-        vit_kwargs: dict[str, any], unet_kwargs: dict[str, any],
+        self, lr: float, 
+        vit_kwargs: dict[str, any], unet_kwargs: dict[str, any]
     ):
         self.lr = lr
-        self.T_max = T_max
         # model
         self.vit = ViT3D(**vit_kwargs)
         self.unet = None
@@ -67,10 +67,10 @@ class FinetuneModel(L.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.lr)
-        # cheduler = torch.optim.lr_scheduler.ExponentialLR(
-        #     self.optimizer, gamma=0.95
-        # )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, T_max=self.T_max
+        scheduler = torch.optim.lr_scheduler.ExponentialLR(
+            optimizer, gamma=0.95
         )
+        #scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        #    optimizer, T_max=self.T_max
+        #)
         return [optimizer], [scheduler]
