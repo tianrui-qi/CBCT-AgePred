@@ -1,14 +1,19 @@
 import torch
-from torch import nn
+import torch.nn as nn
 import einops
 import einops.layers.torch
 
 
-__all__ = []
+__all__ = ["ViT3D"]
 
 
 class ViT3D(nn.Module):
-    def __init__(self, *, image_size, image_patch_size, frames, frame_patch_size, num_classes, dim, depth, heads, mlp_dim, pool = 'cls', channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0.):
+    def __init__(
+        self, *, 
+        image_size, image_patch_size, frames, frame_patch_size, 
+        num_classes, dim, depth, heads, mlp_dim, pool = 'cls', 
+        channels = 3, dim_head = 64, dropout = 0., emb_dropout = 0.
+    ):
         super().__init__()
         image_height, image_width = ViT3D.pair(image_size)
         patch_height, patch_width = ViT3D.pair(image_patch_size)
