@@ -1,15 +1,20 @@
 import torch
+import torch.nn as nn
 import torch.utils.data
 import torch.nn.functional as F
 from torch import Tensor
 import torchio as tio
 
 import pandas as pd
+import skimage.util
 
 import os
 import re
 import tqdm
 import tifffile
+import collections
+
+import src.model
 
 
 __all__ = ["PretrainDataset", "FinetuneDataset"]
@@ -83,7 +88,9 @@ class PretrainDataset(torch.utils.data.Dataset):
 
 class FinetuneDataset(torch.utils.data.Dataset):
     def __init__(
-        self, dim: list[int], stride: list[int], profile_load_path: str,
+        self, dim: list[int], stride: list[int],
+        profile_load_path: str,
+        vit_kwargs: dict[str, any], ckpt_load_path: str,
         min_HU: int = -1000, max_HU: int = 5000,
     ) -> None:
         super(FinetuneDataset, self).__init__()
@@ -92,14 +99,35 @@ class FinetuneDataset(torch.utils.data.Dataset):
         self.stride = stride
         # profile
         self.profile = pd.read_csv(profile_load_path)
+        # vit
+        self.vit = self._getVit(vit_kwargs, ckpt_load_path)
         # normalization
         self.min_HU = min_HU
         self.max_HU = max_HU
 
+    def _getVit(
+        self, vit_kwargs: dict[str, any], ckpt_load_path: str,
+    ) -> src.model.ViT3D:
+        # format the ckpt file
+        ckpt = torch.load(ckpt_load_path)["state_dict"]
+        ckpt_vit = collections.OrderedDict()
+        for key, value in ckpt.items():
+            if key.startswith('vit.'):
+                new_key = key[4:]
+                ckpt_vit[new_key] = value
+        # load the vit
+        vit: nn.Module = src.model.ViT3D(**vit_kwargs)
+        vit.load_state_dict(ckpt_vit)
+        vit.eval()
+        for param in vit.parameters(): param.requires_grad = False
+        if torch.cuda.is_available(): vit.to("cuda")
+
+        return vit
+
     def __getitem__(self, index: int) -> tuple[Tensor, Tensor]:
         # read the tiff
-        self.tiff = tifffile.imread(self.profile["tiff"].iloc[index])
-        self.tiff = torch.from_numpy(self.tiff).float()
+        tiff = tifffile.imread(self.profile["tiff"].iloc[index])
+        tiff = torch.from_numpy(tiff).float()
         # normalization
         tiff = (tiff - self.min_HU) / (self.max_HU - self.min_HU)
         tiff = torch.clip(tiff, 0, 1)
@@ -112,21 +140,32 @@ class FinetuneDataset(torch.utils.data.Dataset):
         )
         tiff = F.pad(tiff, pad)
         # batch into number of self.dim patch
-        patches = []
-        for z in range(0, tiff.shape[0]-self.dim[0]+1, self.stride[0]):
-            for y in range(0, tiff.shape[1]-self.dim[1]+1, self.stride[1]):
-                for x in range(0, tiff.shape[2]-self.dim[2]+1, self.stride[2]):
-                    patches.append(tiff[
-                        z : z+self.dim[0], 
-                        y : y+self.dim[1], 
-                        x : x+self.dim[2]
-                    ])
-        patches = torch.stack(patches)
+        patches = torch.from_numpy(skimage.util.view_as_windows(
+            tiff.numpy(), window_shape=self.dim, step=self.stride
+        ))
+        
+        # encode the patches by vit
+        frame = torch.zeros(
+            (torch.tensor(patches.shape[:3]) * 16).int().tolist(),
+            device="cuda" if torch.cuda.is_available() else "cpu",
+        )
+        for z in range(patches.shape[0]):
+            for y in range(patches.shape[1]):
+                for x in range(patches.shape[2]):
+                    patch = patches[z, y, x].unsqueeze(0).unsqueeze(0).to(
+                        "cuda"
+                    ) if torch.cuda.is_available() else patch
+                    encode = self.vit(
+                        patch
+                    ).squeeze(0).squeeze(0).reshape(16, 16, 16)
+                    frame[
+                        z*16:(z+1)*16, y*16:(y+1)*16, x*16:(x+1)*16
+                    ] = encode
 
         # age
         age = torch.tensor(self.profile.loc[index]["age"]).float()
 
-        return patches, age
+        return frame, age
 
     def __len__(self) -> int:
         return len(self.profile)
