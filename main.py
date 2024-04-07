@@ -1,6 +1,8 @@
 import torch
 import lightning as L
 
+import argparse
+
 import src
 
 
@@ -11,10 +13,25 @@ if __name__ == "__main__":
     torch.set_float32_matmul_precision('medium')
     L.seed_everything(42, workers=True)
 
-    config = src.PretrainConfig()
-    src.PretrainTrainer(
-        **config.trainer, 
-        trainset=src.PretrainDataset(**config.trainset), 
-        validset=src.PretrainDataset(**config.validset), 
-        model=src.PretrainModel(**config.model)
-    ).fit()
+    parser = argparse.ArgumentParser()
+    subparsers = parser.add_subparsers(dest="mode")
+    parser_train = subparsers.add_parser("pretrain")
+    parser_evalu = subparsers.add_parser("finetune")
+    args = parser.parse_args()
+
+    if args.mode == "pretrain":
+        config = src.PretrainConfig()
+        src.Trainer(
+            **config.trainer, 
+            trainset=src.PretrainDataset(**config.trainset), 
+            validset=src.PretrainDataset(**config.validset), 
+            model=src.PretrainModel(**config.model)
+        ).fit()
+    if args.mode == "finetune":
+        config = src.FinetuneConfig()
+        src.Trainer(
+            **config.trainer, 
+            trainset=src.FinetuneDataset(**config.trainset), 
+            validset=src.FinetuneDataset(**config.validset), 
+            model=src.FinetuneModel(**config.model)
+        ).fit()

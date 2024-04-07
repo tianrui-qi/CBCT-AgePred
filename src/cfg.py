@@ -62,7 +62,7 @@ class PretrainConfig:
             # recoder
             "version": "pretrain2",     # None to use pl default version control
             "save_top_k": 5,
-            "ckpt_load_path": "ckpt/pretrain1/epoch=25-step=2600.ckpt",
+            "ckpt_load_path": "",
             "ckpt_load_lr": False,
         }
 
@@ -71,33 +71,43 @@ class FinetuneConfig:
     def __init__(self) -> None:
         self.trainset = {   # src.data.FinetuneDataset
             # dim
-            "dim": [160, 160, 160], 
+            "dim":    [160, 160, 160], 
             "stride": [140, 140, 140],
             # profile
             "profile_load_path": profile_train_path,
+            # vit
+            "vit_kwargs": PretrainConfig().model["vit_kwargs"],
+            "ckpt_load_path": "ckpt/pretrain2/epoch=84-step=8500.ckpt",
         }
         self.validset = {   # src.data.FinetuneDataset
             # dim
-            "dim": [160, 160, 160], 
+            "dim":    [160, 160, 160], 
             "stride": [140, 140, 140],
             # profile
             "profile_load_path": profile_valid_path,
+            # vit
+            "vit_kwargs": PretrainConfig().model["vit_kwargs"],
+            "ckpt_load_path": "ckpt/pretrain2/epoch=84-step=8500.ckpt",
         }
         self.model = {
-            "lr": 5e-4,
-            "T_max": 15,                    # for cosine annealing
-            "vit_kwargs": {
-                "image_size": 160,          # D
-                "frames": 160,              # H and W
-                "image_patch_size": 16,     # D patch size
-                "frame_patch_size": 16,     # H and W patch size
-                "num_classes": 4096,        # 16 * 16 * 16
-                "dim": 1024,
-                "depth": 6,
-                "heads": 8,
-                "mlp_dim": 2048,
-                "channels": 1,
-                "dropout": 0.1,    
-                "emb_dropout": 0.1,   
+            "lr": 1e-3,
+            "unet_kwargs": {
+                "feats": [1, 16, 32, 64, 128,],
+                "num_classes": 1,
+                "use_cbam": False,
+                "use_res": False,
             },
+        }
+        self.trainer = {
+            # train
+            "max_epoch": -1,
+            "accumu_steps": 1,
+            # data
+            "batch_size": 16,
+            "num_workers": 2,
+            # recoder
+            "version": "finetune1",     # None to use pl default version control
+            "save_top_k": 5,
+            "ckpt_load_path": "",
+            "ckpt_load_lr": False,
         }
