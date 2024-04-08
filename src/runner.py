@@ -24,11 +24,11 @@ class Trainer:
         # data
         self.trainloader = torch.utils.data.DataLoader(
             trainset, batch_size=batch_size, num_workers=num_workers, 
-            persistent_workers=True, #pin_memory=True,
+            persistent_workers=True, shuffle=True,
         )
         self.validloader = torch.utils.data.DataLoader(
             validset, batch_size=batch_size, num_workers=num_workers, 
-            persistent_workers=True, #pin_memory=True,
+            persistent_workers=True, 
         )
         # model
         if ckpt_load_lr or not ckpt_load_path:

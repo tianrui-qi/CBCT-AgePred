@@ -30,7 +30,7 @@ class PretrainConfig:
             "degrees": None,
         }
         self.model = {
-            "lr": 1e-5,
+            "lr": 5e-4,
             "vit_kwargs": {
                 "image_size": 160,          # D
                 "frames": 160,              # H and W
@@ -60,8 +60,8 @@ class PretrainConfig:
             "batch_size": 10,
             "num_workers": 5,
             # recoder
-            "version": "pretrain2",     # None to use pl default version control
-            "save_top_k": 5,
+            "version": "pretrain1",     # None to use pl default version control
+            "save_top_k": 10,
             "ckpt_load_path": "",
             "ckpt_load_lr": False,
         }
@@ -71,31 +71,31 @@ class FinetuneConfig:
     def __init__(self) -> None:
         self.trainset = {   # src.data.FinetuneDataset
             # dim
-            "dim":    [160, 160, 160], 
+            "dim"   : [160, 160, 160], 
             "stride": [140, 140, 140],
             # profile
             "profile_load_path": profile_train_path,
             # vit
             "vit_kwargs": PretrainConfig().model["vit_kwargs"],
-            "ckpt_load_path": "ckpt/pretrain2/epoch=84-step=8500.ckpt",
+            "ckpt_load_path": "",
         }
         self.validset = {   # src.data.FinetuneDataset
             # dim
-            "dim":    [160, 160, 160], 
+            "dim"   : [160, 160, 160], 
             "stride": [140, 140, 140],
             # profile
             "profile_load_path": profile_valid_path,
             # vit
             "vit_kwargs": PretrainConfig().model["vit_kwargs"],
-            "ckpt_load_path": "ckpt/pretrain2/epoch=84-step=8500.ckpt",
+            "ckpt_load_path": "",
         }
         self.model = {
-            "lr": 1e-3,
+            "lr": 5e-4,
             "unet_kwargs": {
-                "feats": [1, 16, 32, 64, 128,],
+                "feats": [1, 32, 64, 128, 256],
                 "num_classes": 1,
                 "use_cbam": False,
-                "use_res": False,
+                "use_res" : True,
             },
         }
         self.trainer = {
@@ -107,7 +107,7 @@ class FinetuneConfig:
             "num_workers": 2,
             # recoder
             "version": "finetune1",     # None to use pl default version control
-            "save_top_k": 5,
+            "save_top_k": 10,
             "ckpt_load_path": "",
             "ckpt_load_lr": False,
         }

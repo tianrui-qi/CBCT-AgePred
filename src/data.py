@@ -24,7 +24,7 @@ class PretrainDataset(torch.utils.data.Dataset):
     def __init__(
         self, num_sample: int, num_sampling: int, dim: list[int],
         profile_load_path: str,
-        min_HU: int = -1000, max_HU: int = 5000,
+        min_HU: int = -1000, max_HU: int = 3000,
         degrees: float | None = 5.0,
     ) -> None:
         super(PretrainDataset, self).__init__()
@@ -91,7 +91,7 @@ class FinetuneDataset(torch.utils.data.Dataset):
         self, dim: list[int], stride: list[int],
         profile_load_path: str,
         vit_kwargs: dict[str, any], ckpt_load_path: str,
-        min_HU: int = -1000, max_HU: int = 5000,
+        min_HU: int = -1000, max_HU: int = 3000,
     ) -> None:
         super(FinetuneDataset, self).__init__()
         # dim
@@ -152,11 +152,10 @@ class FinetuneDataset(torch.utils.data.Dataset):
         for z in range(patches.shape[0]):
             for y in range(patches.shape[1]):
                 for x in range(patches.shape[2]):
-                    patch = patches[z, y, x].unsqueeze(0).unsqueeze(0).to(
-                        "cuda"
-                    ) if torch.cuda.is_available() else patch
+                    patch = patches[z, y, x]
+                    if torch.cuda.is_available(): patch = patch.to("cuda")
                     encode = self.vit(
-                        patch
+                        patch.unsqueeze(0).unsqueeze(0)
                     ).squeeze(0).squeeze(0).reshape(16, 16, 16)
                     frame[
                         z*16:(z+1)*16, y*16:(y+1)*16, x*16:(x+1)*16
