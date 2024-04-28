@@ -1,10 +1,60 @@
-__all__ = ["PretrainConfig", "FinetuneConfig"]
+__all__ = ["UNetConfig", "PretrainConfig", "FinetuneConfig"]
 
 
-info_load_fold = "D:/info/"
-tiff_load_fold = "D:/tiff/"
+info_load_fold = "data/info/"
+tiff_load_fold = "data/tiff/"
 profile_train_path = "data/profile_train.csv"
 profile_valid_path = "data/profile_valid.csv"
+
+
+class UNetConfig:
+    def __init__(self) -> None:
+        self.trainset = {   # src.data.PretrainDataset
+            # profile
+            "profile_load_path": profile_train_path,
+            # normalization
+            "min_HU": 0,
+            "max_HU": 4000,
+            # augmentation
+            "degrees": 5.0,
+            "translation": 10,
+            # mode
+            "mode": "whole",        # "whole" or "teeth"
+        }
+        self.validset = {   # src.data.PretrainDataset
+            # profile
+            "profile_load_path": profile_valid_path,
+            # normalization
+            "min_HU": 0,
+            "max_HU": 4000,
+            # augmentation
+            "degrees": None,        # to disable augmentation
+            "translation": None,    # to disable augmentation
+            # mode
+            "mode": "whole",        # "whole" or "teeth"
+        }
+        self.model = {
+            "lr": 5e-4,
+            "unet_kwargs": {
+                "feats": [1, 16, 32, 64, 128, 256, 512],
+                "num_classes": 1,
+                "use_cbam": True,
+                "use_res" : True,
+            },
+        }
+        self.trainer = {
+            # train
+            "max_epoch": -1,
+            "accumu_steps": 16,
+            # data
+            "batch_size": 1,
+            "num_workers": 4,
+            # recoder
+            "version": "unet1",     # None to use pl default version control
+            "save_top_k": 10,
+            "ckpt_load_path": "",
+            "ckpt_load_lr": False,
+        }
 
 
 class PretrainConfig:
@@ -16,6 +66,9 @@ class PretrainConfig:
             "dim": [160, 160, 160],
             # profile
             "profile_load_path": profile_train_path,
+            # normalization
+            "min_HU": 0,
+            "max_HU": 4000,
             # augmentation
             "degrees": 5.0,
         }
@@ -26,6 +79,9 @@ class PretrainConfig:
             "dim": [160, 160, 160],
             # profile
             "profile_load_path": profile_valid_path,
+            # normalization
+            "min_HU": 0,
+            "max_HU": 4000,
             # augmentation
             "degrees": None,
         }
@@ -78,6 +134,9 @@ class FinetuneConfig:
             # vit
             "vit_kwargs": PretrainConfig().model["vit_kwargs"],
             "ckpt_load_path": "",
+            # normalization
+            "min_HU": 0,
+            "max_HU": 4000,
         }
         self.validset = {   # src.data.FinetuneDataset
             # dim
@@ -88,6 +147,9 @@ class FinetuneConfig:
             # vit
             "vit_kwargs": PretrainConfig().model["vit_kwargs"],
             "ckpt_load_path": "",
+            # normalization
+            "min_HU": 0,
+            "max_HU": 4000,
         }
         self.model = {
             "lr": 5e-4,

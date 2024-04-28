@@ -13,18 +13,84 @@ import re
 import tqdm
 import tifffile
 import collections
+from typing import Literal
 
 import src.model
 
 
-__all__ = ["PretrainDataset", "FinetuneDataset"]
+__all__ = [
+    "UNetDataset",
+    "PretrainDataset", "FinetuneDataset"
+]
+
+
+class UNetDataset(torch.utils.data.Dataset):
+    def __init__(
+        self, profile_load_path: str,
+        min_HU: int = 0, max_HU: int = 4000,
+        degrees: float | None = 5.0, translation: int | None = 10,
+        mode: str = Literal["whole", "teeth"],
+    ) -> None:
+        super(UNetDataset, self).__init__()
+        # profile
+        self.profile = pd.read_csv(profile_load_path)
+        # normalization
+        self.min_HU = min_HU
+        self.max_HU = max_HU
+        # augmentation
+        self.transform = tio.transforms.Compose([
+            tio.RandomFlip(axes=(2,), flip_probability=0.5),
+            tio.RandomAffine(
+                scales=0, degrees=degrees, 
+                translation=translation, isotropic=True
+            ),
+        ]) if degrees or translation else None
+        # mode
+        self.mode = mode
+
+    def __getitem__(self, index: int) -> tuple[Tensor, float]:
+        # read the tiff
+        tiff = tifffile.imread(self.profile["tiff"].iloc[index])
+        tiff = torch.from_numpy(tiff).float()
+        # normalization
+        tiff = (tiff - self.min_HU) / (self.max_HU - self.min_HU)
+        tiff = torch.clip(tiff, 0, 1)
+        # augmentation (rotation and translation)
+        if self.transform != None:
+            tiff = self.transform(tiff.unsqueeze(0)).squeeze(0)
+        # crop to (416 416 416) for whole or (272 272 320) for teeth
+        if self.mode == "whole":
+            if tiff.shape == (440, 536, 536):
+                tiff = tiff[440-416:440,  50: 50+416,  60: 60+416]
+            if tiff.shape == (528, 640, 640):
+                tiff = tiff[528-416:528, 100:100+416, 112:112+416]
+            if tiff.shape == (576, 768, 768):
+                tiff = tiff[576-416:576,  50: 50+416, 176:176+416]
+        if self.mode == "teeth":
+            if tiff.shape == (440, 536, 536): tiff = tiff[
+                138:410, 80:352, tiff.shape[2]//2-160:tiff.shape[2]//2+160
+            ]
+            if tiff.shape == (528, 640, 640): tiff = tiff[
+                206:478, 80:352, tiff.shape[2]//2-160:tiff.shape[2]//2+160
+            ]
+            if tiff.shape == (576, 768, 768): tiff = tiff[
+                244:516, 80:352, tiff.shape[2]//2-160:tiff.shape[2]//2+160
+            ]
+
+        # age
+        age = torch.tensor(self.profile.loc[index]["age"]).float()
+
+        return tiff, age
+
+    def __len__(self) -> int:
+        return len(self.profile)
 
 
 class PretrainDataset(torch.utils.data.Dataset):
     def __init__(
         self, num_sample: int, num_sampling: int, dim: list[int],
         profile_load_path: str,
-        min_HU: int = -1000, max_HU: int = 3000,
+        min_HU: int = 0, max_HU: int = 4000,
         degrees: float | None = 5.0,
     ) -> None:
         super(PretrainDataset, self).__init__()
@@ -91,7 +157,7 @@ class FinetuneDataset(torch.utils.data.Dataset):
         self, dim: list[int], stride: list[int],
         profile_load_path: str,
         vit_kwargs: dict[str, any], ckpt_load_path: str,
-        min_HU: int = -1000, max_HU: int = 3000,
+        min_HU: int = 0, max_HU: int = 4000,
     ) -> None:
         super(FinetuneDataset, self).__init__()
         # dim
@@ -219,29 +285,20 @@ def getProfile(
     profile_valid = pd.DataFrame(columns=profile.columns)
     for shape in profile["shape"].unique():
         for sex in profile["sex"].unique():
-            temp = profile
-            temp: pd.DataFrame = temp[temp["shape"] == shape]
-            temp: pd.DataFrame = temp[temp["sex"] == sex]
-            temp_train = temp.sample(frac=train_percentage)
-            temp_valid = temp.drop(temp_train.index)
-            profile_train = temp_train if profile_train.empty else pd.concat(
-                [profile_train, temp_train]
-            )
-            profile_valid = temp_valid if profile_valid.empty else pd.concat(
-                [profile_valid, temp_valid]
-            )
-
-    # print info
-    print("train")
-    for shape in profile_train["shape"].unique():
-        age_mean = profile_train[profile_train["shape"] == shape]["age"].mean()
-        sex_mean = profile_train[profile_train["shape"] == shape]["sex"].mean()
-        print(f"{shape} age: {age_mean:.2f} sex: {sex_mean:.2f}")
-    print("valid")
-    for shape in profile_valid["shape"].unique():
-        age_mean = profile_valid[profile_valid["shape"] == shape]["age"].mean()
-        sex_mean = profile_valid[profile_valid["shape"] == shape]["sex"].mean()
-        print(f"{shape} age: {age_mean:.2f} sex: {sex_mean:.2f}")
+            for age in range(7, 21):
+                temp = profile
+                temp = temp[temp["shape"] == shape]
+                temp = temp[temp["sex"] == sex]
+                temp = temp[temp["age"] >= age]
+                temp = temp[temp["age"] < age + 1]
+                temp_train = temp.sample(frac=train_percentage)
+                temp_valid = temp.drop(temp_train.index)
+                profile_train = temp_train if profile_train.empty else pd.concat(
+                    [profile_train, temp_train]
+                )
+                profile_valid = temp_valid if profile_valid.empty else pd.concat(
+                    [profile_valid, temp_valid]
+                )
 
     return profile, profile_train, profile_valid
 

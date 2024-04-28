@@ -15,10 +15,19 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="mode")
-    parser_train = subparsers.add_parser("pretrain")
-    parser_evalu = subparsers.add_parser("finetune")
+    subparsers.add_parser("unet")
+    subparsers.add_parser("pretrain")
+    subparsers.add_parser("finetune")
     args = parser.parse_args()
 
+    if args.mode == "unet":
+        config = src.UNetConfig()
+        src.Trainer(
+            **config.trainer, 
+            trainset=src.UNetDataset(**config.trainset), 
+            validset=src.UNetDataset(**config.validset), 
+            model=src.UNetModel(**config.model)
+        ).fit()
     if args.mode == "pretrain":
         config = src.PretrainConfig()
         src.Trainer(

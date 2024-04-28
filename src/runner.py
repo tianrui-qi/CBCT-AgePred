@@ -17,9 +17,12 @@ class Trainer:
         batch_size: int, num_workers: int,
         version: str | None, save_top_k: int, 
         ckpt_load_path: str | None, ckpt_load_lr: bool,
-        trainset: src.data.PretrainDataset | src.data.FinetuneDataset, 
-        validset: src.data.PretrainDataset | src.data.FinetuneDataset,
-        model: src.model.PretrainModel | src.model.FinetuneModel,
+        trainset: src.data.UNetDataset | 
+        src.data.PretrainDataset | src.data.FinetuneDataset, 
+        validset: src.data.UNetDataset | 
+        src.data.PretrainDataset | src.data.FinetuneDataset,
+        model: src.model.UNetModel | 
+        src.model.PretrainModel | src.model.FinetuneModel,
     ) -> None:
         # data
         self.trainloader = torch.utils.data.DataLoader(
@@ -33,6 +36,12 @@ class Trainer:
         # model
         if ckpt_load_lr or not ckpt_load_path:
             self.model = model
+        elif isinstance(model, src.model.UNetModel):
+            self.model = src.model.UNetModel.load_from_checkpoint(
+                ckpt_load_path, strict=False,
+                lr=model.lr, 
+                unet_kwargs=model.unet_kwargs,
+            )
         elif isinstance(model, src.model.PretrainModel):
             self.model = src.model.PretrainModel.load_from_checkpoint(
                 ckpt_load_path, strict=False,
