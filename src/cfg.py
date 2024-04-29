@@ -9,7 +9,7 @@ profile_valid_path = "data/profile_valid.csv"
 
 class UNetConfig:
     def __init__(self) -> None:
-        self.trainset = {   # src.data.PretrainDataset
+        self.trainset = {   # src.data.UNetDataset
             # profile
             "profile_load_path": profile_train_path,
             # normalization
@@ -19,30 +19,30 @@ class UNetConfig:
             "degrees": 5.0,
             "translation": 10,
             # mode
-            "mode": "whole",        # "whole" or "teeth"
+            "mode": "teeth",        # "whole" or "teeth"
         }
-        self.validset = {   # src.data.PretrainDataset
+        self.validset = {   # src.data.UNetDataset
             # profile
             "profile_load_path": profile_valid_path,
             # normalization
-            "min_HU": 0,
-            "max_HU": 4000,
+            "min_HU": self.trainset["min_HU"],
+            "max_HU": self.trainset["max_HU"],
             # augmentation
             "degrees": None,        # to disable augmentation
             "translation": None,    # to disable augmentation
             # mode
-            "mode": "whole",        # "whole" or "teeth"
+            "mode": self.trainset["mode"],
         }
-        self.model = {
+        self.model = {      # src.model.UNetModel
             "lr": 5e-4,
             "unet_kwargs": {
-                "feats": [1, 16, 32, 64, 128, 256, 512],
+                "feats": [1, 24, 48, 96, 192, 384],
                 "num_classes": 1,
                 "use_cbam": True,
                 "use_res" : True,
             },
         }
-        self.trainer = {
+        self.trainer = {    # src.runner.Trainer
             # train
             "max_epoch": -1,
             "accumu_steps": 16,
@@ -76,16 +76,16 @@ class PretrainConfig:
             # dim
             "num_sample": 200,
             "num_sampling": 100,
-            "dim": [160, 160, 160],
+            "dim": self.trainset["dim"],
             # profile
             "profile_load_path": profile_valid_path,
             # normalization
-            "min_HU": 0,
-            "max_HU": 4000,
+            "min_HU": self.trainset["min_HU"],
+            "max_HU": self.trainset["max_HU"],
             # augmentation
             "degrees": None,
         }
-        self.model = {
+        self.model = {      # src.model.PretrainModel
             "lr": 5e-4,
             "vit_kwargs": {
                 "image_size": 160,          # D
@@ -108,7 +108,7 @@ class PretrainConfig:
                 "decoder_heads": 8,
             },
         }
-        self.trainer = {
+        self.trainer = {    # src.runner.Trainer
             # train
             "max_epoch": -1,
             "accumu_steps": 100,
@@ -148,10 +148,10 @@ class FinetuneConfig:
             "vit_kwargs": PretrainConfig().model["vit_kwargs"],
             "ckpt_load_path": "",
             # normalization
-            "min_HU": 0,
-            "max_HU": 4000,
+            "min_HU": self.trainset["min_HU"],
+            "max_HU": self.trainset["max_HU"],
         }
-        self.model = {
+        self.model = {      # src.model.FinetuneDataset
             "lr": 5e-4,
             "unet_kwargs": {
                 "feats": [1, 32, 64, 128, 256],
@@ -160,7 +160,7 @@ class FinetuneConfig:
                 "use_res" : True,
             },
         }
-        self.trainer = {
+        self.trainer = {    # src.runner.Trainer
             # train
             "max_epoch": -1,
             "accumu_steps": 1,
